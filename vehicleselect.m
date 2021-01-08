@@ -15,12 +15,5 @@ for j=STF:size(displacement,1)
 endfor
 plot(displacement_thre);
 
-#########
 
-did not mention how to compute relative displacement. 
-You should describe how to compute this in detail as algorithm description. 
-Some of setting is conducted by my python program. 
-
-Additionally, you had better show all the photos when large displacements (e.g. >2mm). 
-Several left lane cars are misdetected as large displacement, but you should explain it with this. 
 
