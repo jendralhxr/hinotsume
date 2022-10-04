@@ -7,33 +7,37 @@ import math
 import cv2
 import sys
 import random
+from skimage import morphology
 from datetime import datetime
 
 THRESHOLD_VAL= 40
 
-startx= 140
-stopx= 1644
-starty=388
-stopy= 468
+startx= 0               
+stopx= 3200
+starty=906
+stopy= 1226
 
-cropped_x_start= 80
-cropped_x_stop= 820 # shorter window makes life easier
-cropped_y_start= 0
-cropped_y_stop= stopy -starty
+cropped_x_start= 40
+cropped_x_stop= stopx-20 # shorter window makes life easier
+cropped_y_start= 10
+cropped_y_stop= 200
 
-thickness_min= 10 # maximum width of bondo
-block_width= 60 # minimum width of vehicle
+thickness_min_horizontal= 16 # maximum width of bondo
+thickness_min_vertical= 16 # maximum width of bondo
+block_width= 140 # minimum width of vehicle
 
 gate_left=  cropped_x_start+block_width # position of ID-assignment gate
 gate_right= cropped_x_stop-block_width # position of ID-assignment gate
 
 cap = cv2.VideoCapture(sys.argv[1])
 ref= cv2.imread(sys.argv[2])
-vsize = (int(1504), int(80))
+vsize = (int(stopx-startx), int(stopy-starty))
 
 temp= ref
 image_prev= ref
 image_display= ref
+#ref = ref[starty:stopy, startx:stopx] # if reference image is not cropped already
+
 out = cv2.VideoWriter(sys.argv[5],cv2.VideoWriter_fourcc(*'MP4V'), 60.0, vsize)
 out2 = cv2.VideoWriter(sys.argv[6],cv2.VideoWriter_fourcc(*'MP4V'), 60.0, vsize)
 
@@ -50,15 +54,48 @@ while(1):
 	# crop and subtract .item(reference] background
 	difference= cv2.absdiff(ref, cropped)
 	ret,thresh = cv2.threshold(difference,THRESHOLD_VAL,255,cv2.THRESH_BINARY);
-	#print(thresh.shape)
 	image_cue = cv2.bitwise_and(cropped, thresh)
+	
+	cue_morph= morphology.remove_small_objects(thresh, min_size=100, connectivity=10)
+	#print("cropped:", cropped.shape)
+	#print("thresh:", thresh.shape)
+	#print("cue_morph:", cue_morph.shape)
+	
+	image_cue = cv2.bitwise_and(cropped, thresh)
+	image_cue = cv2.bitwise_and(image_cue, cue_morph)
 	
 	#dateTimeObj = datetime.now()
 	#timestampStr = dateTimeObj.strftime("%H:%M:%S.%f")
 	#print('crop: ', timestampStr)
 	
+	#remove thin horizontal line (such as cables)
 	for i in range(cropped_x_start, cropped_x_stop-1):
-		for j in range(cropped_y_stop-1, cropped_y_start, -1):
+		blobstart= 0
+		blobend= 0
+		for j in range(cropped_y_stop-1, cropped_y_start+1, -1):
+			if image_cue.item(j,i,1) > THRESHOLD_VAL: # start of object
+				if (blobstart== 0):
+					blobstart= j
+			if image_cue.item(j,i,1) < THRESHOLD_VAL: # end of object
+				if (blobstart!= 0):
+					blobend= j
+			if (blobend-blobstart) < thickness_min_vertical:
+				for j in range(blobend, blobstart, -1):
+					image_cue.itemset((j,i,1) , 0) # remove all traces, perhaps green only would suffice
+					image_cue.itemset((j,i,0) , 0) # blue too
+					image_cue.itemset((j,i,2) , 0) # red too
+				blobstart= 0
+				blobend= 0
+				
+				
+				
+	
+	# blue: object 
+	# green: bondo (probable object behind occlusion)
+	# red: assigned ID
+	
+	for i in range(cropped_x_start, cropped_x_stop-1):
+		for j in range(cropped_y_stop-1, cropped_y_start+1, -1):
 			if  image_cue.item(j,i,1) > THRESHOLD_VAL: # if detect object, based on green
 				image_cue.itemset((1,i,0) , 255) # blue
 				image_cue.itemset((3,i,2) , 0) # clear the ID, if noise happens
@@ -75,7 +112,7 @@ while(1):
 		if image_cue.item(1,i,0) > THRESHOLD_VAL:
 			block_start= i
 		else:
-			if (i-block_start) < thickness_min: 
+			if (i-block_start) < thickness_min_horizontal: 
 				image_cue.itemset((1,i,1) , 255) # green
 				image_cue.itemset((3,i,2) , 0) # clear the ID, if noise happens
 				image_cue.itemset((5,i,2) , 0) # clear the ID, if noise happens
@@ -107,7 +144,7 @@ while(1):
 				# from left: 101 to 200
 				#print("{} start{} stop{}".format(framenum, block_start, block_end))
 				
-				#from left gate
+				#from left gate, line3
 				if (block_start < gate_left) and (block_end > gate_left):
 					vehicle_id=  image_prev.item(3, int((block_start + block_end)/2) ,2)
 					if (vehicle_id == 0) :
@@ -117,7 +154,7 @@ while(1):
 					for n in range(block_start, block_end):
 						image_cue.itemset((3,n,2) , vehicle_id)
 				
-				# from right gate
+				# from right gate, line5
 				elif (block_start < gate_right) and (block_end > gate_right):
 					vehicle_id= image_prev.item(5, int((block_start + block_end)/2) ,2)
 					if (vehicle_id == 0) :
@@ -138,9 +175,21 @@ while(1):
 							break
 					if ( vehicle_id != 0) :
 						print("{} {} {} {} 1".format(vehicle_id, framenum, block_start, block_end)) # left is '1'
-						start_point = (block_start, 8) 
-						end_point = (block_end, 72) 
-						label_point= (block_start+10, 30)
+						
+						# find the height
+						height_start= 99999999 
+						height_end= 0
+						for i in range(block_start, block_end-1):
+							for j in range(cropped_y_stop-2, cropped_y_start+6, -1):
+								if image_cue.item(j,i,1) != 0:
+									if (j < height_start):
+										height_start= j
+									if (j > height_end):
+										height_end= j
+						
+						start_point = (block_start, height_start)   #CHECKHERE!!
+						end_point = (block_end, height_end)	  #CHECKHERE!!
+						label_point= (block_start+10, height_end-20)
 						cv2.rectangle(image_display, start_point, end_point, (255,36,12), 2) # blue
 						cv2.putText(image_display, str(vehicle_id), label_point, cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,36, 12), 2)
 						for n in range(block_start, block_end):
@@ -152,9 +201,21 @@ while(1):
 							break
 					if ( vehicle_id != 0) :
 						print("{} {} {} {} 0".format(vehicle_id, framenum, block_start, block_end)) # right is '0'
-						start_point = (block_start, 8) 
-						end_point = (block_end, 72) 
-						label_point= (block_start+10, 65)
+						
+						# find the height
+						height_start= 99999999 
+						height_end= 0
+						for i in range(block_start, block_end-1):
+							for j in range(cropped_y_stop-2, cropped_y_start+6, -1):
+								if image_cue.item(j,i,1) != 0:
+									if (j < height_start):
+										height_start= j
+									if (j > height_end):
+										height_end= j
+						
+						start_point = (block_start, height_start) 
+						end_point = (block_end, height_end) 
+						label_point= (block_start+10, height_start+20)
 						cv2.rectangle(image_display, start_point, end_point, (12,36,255), 2) # red
 						cv2.putText(image_display, str(vehicle_id), label_point, cv2.FONT_HERSHEY_SIMPLEX, 0.8, (12,36, 255), 2)
 						for n in range(block_start, block_end):
@@ -171,25 +232,33 @@ while(1):
 
 	#draw the gate
 	for j in range(cropped_y_start, cropped_y_stop):
-		image_display.itemset((j,gate_left,1) , 255) # green
-		image_display.itemset((j,gate_right,1) , 255) # green
+#		image_display.itemset((j,gate_left,1) , 255) # green
+#		image_display.itemset((j,gate_right,1) , 255) # green
+		image_cue.itemset((j,gate_left,1) , 255) # green
+		image_cue.itemset((j,gate_right,1) , 255) # green
 	
 	#cv2.imshow('display',image_display)
 	#cv2.imshow('cue',image_cue)
-	
-	#k = cv2.waitKey(1) & 0xFF
-	#if k== ord("c"):
-	#	print("snap reference")
-	#	cv2.imwrite("ref.png", cropped)
-	#if k== 27: # esc
-	#	break
-	
-	out.write(image_display)
-	out2.write(image_cue)
-	
+	image_display_resized=cv2.resize(image_display, (1600,176), interpolation= cv2.INTER_AREA)
+	image_cue_resized = cv2.resize(image_cue, (1600,176), interpolation = cv2.INTER_AREA)
+	cv2.imshow('display',image_display_resized)
+	cv2.imshow('cue',image_cue_resized)
+	   
 	dateTimeObj = datetime.now()
 	timestampStr = dateTimeObj.strftime("%H:%M:%S.%f")
-	print('time: ', timestampStr)
+	timestampStr_simple = dateTimeObj.strftime("%H%M%S")
+	print('time: ', timestampStr, "framenum: ", str(framenum));
+	
+	k = cv2.waitKey(1) & 0xFF
+	if k== ord("c"):
+		print("saving: "+timestampStr_simple+'-'+str(framenum)+'.png')
+		cv2.imwrite(timestampStr_simple+'-'+str(framenum)+'.png', cropped)
+	if k== 27: # esc
+		break
+	
+	#out.write(image_display)
+	#out2.write(image_cue)
+	
 	
 	#print(framenum)
 	framenum += 1
