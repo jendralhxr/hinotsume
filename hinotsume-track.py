@@ -10,21 +10,26 @@ import random
 from skimage import morphology
 from datetime import datetime
 
-THRESHOLD_VAL= 40
+THRESHOLD_VAL= 30
 
-startx= 0               
-stopx= 3200
-starty=906
-stopy= 1226
+# margin in the actual image, to be cropped
+startx= 880               
+stopx= 4096
+starty=0
+stopy= 480
 
-cropped_x_start= 40
-cropped_x_stop= stopx-20 # shorter window makes life easier
-cropped_y_start= 10
-cropped_y_stop= 200
+# image section to be processed, within cropped area
+cropped_x_start= 0
+cropped_x_stop= 3200 # shorter window makes life easier
+cropped_y_start= 0
+cropped_y_stop= 470
 
-thickness_min_horizontal= 16 # maximum width of bondo
-thickness_min_vertical= 16 # maximum width of bondo
-block_width= 140 # minimum width of vehicle
+thickness_min_horizontal= 60 # maximum width of bondo
+thickness_min_vertical= 10 # maximum width of bondo
+block_width= 300 # minimum width of vehicle
+update_interval= 200 # frames
+
+digit=8;
 
 gate_left=  cropped_x_start+block_width # position of ID-assignment gate
 gate_right= cropped_x_stop-block_width # position of ID-assignment gate
@@ -38,11 +43,12 @@ image_prev= ref
 image_display= ref
 #ref = ref[starty:stopy, startx:stopx] # if reference image is not cropped already
 
-out = cv2.VideoWriter(sys.argv[5],cv2.VideoWriter_fourcc(*'MP4V'), 60.0, vsize)
-out2 = cv2.VideoWriter(sys.argv[6],cv2.VideoWriter_fourcc(*'MP4V'), 60.0, vsize)
+out = cv2.VideoWriter(sys.argv[5],cv2.VideoWriter_fourcc(*'MP4V'), 30.0, vsize)
+out2 = cv2.VideoWriter(sys.argv[6],cv2.VideoWriter_fourcc(*'MP4V'), 30.0, vsize)
 
 cap.set(cv2.CAP_PROP_POS_FRAMES, float(sys.argv[3]))
 framenum = int(sys.argv[3])
+update= 0
 
 while(1):
 	#dateTimeObj = datetime.now()
@@ -54,7 +60,7 @@ while(1):
 	# crop and subtract .item(reference] background
 	difference= cv2.absdiff(ref, cropped)
 	ret,thresh = cv2.threshold(difference,THRESHOLD_VAL,255,cv2.THRESH_BINARY);
-	image_cue = cv2.bitwise_and(cropped, thresh)
+	#image_cue = cv2.bitwise_and(cropped, thresh)
 	
 	cue_morph= morphology.remove_small_objects(thresh, min_size=100, connectivity=10)
 	#print("cropped:", cropped.shape)
@@ -86,9 +92,6 @@ while(1):
 					image_cue.itemset((j,i,2) , 0) # red too
 				blobstart= 0
 				blobend= 0
-				
-				
-				
 	
 	# blue: object 
 	# green: bondo (probable object behind occlusion)
@@ -97,6 +100,7 @@ while(1):
 	for i in range(cropped_x_start, cropped_x_stop-1):
 		for j in range(cropped_y_stop-1, cropped_y_start+1, -1):
 			if  image_cue.item(j,i,1) > THRESHOLD_VAL: # if detect object, based on green
+				#print("f{} j{} i{}".format(framenum, j, i))
 				image_cue.itemset((1,i,0) , 255) # blue
 				image_cue.itemset((3,i,2) , 0) # clear the ID, if noise happens
 				image_cue.itemset((5,i,2) , 0) # clear the ID, if noise happens
@@ -125,10 +129,13 @@ while(1):
 	
 	block_start= 0
 	block_end= 0
+	vehicle_detect= 0
+	
 	image_display= cropped
 	for i in range(cropped_x_start, cropped_x_stop-1):
 		if (image_cue.item(1,i,0) != 0 or image_cue.item(1,i,1) != 0) and block_start==0:
 			block_start= i
+			vehicle_detect= 1
 		elif (image_cue.item(1,i,0) == 0 and image_cue.item(1,i,1) == 0) and block_end==0:
 			block_end= i
 			#remove spurious lines less than minimum block width
@@ -142,7 +149,8 @@ while(1):
 			elif (block_start!= 0) and (block_end != 0):
 				# from right: red: 1 to 99
 				# from left: 101 to 200
-				#print("{} start{} stop{}".format(framenum, block_start, block_end))
+				# print("{} start{} stop{}".format(framenum, block_start, block_end))
+				vehicle_detect= 1
 				
 				#from left gate, line3
 				if (block_start < gate_left) and (block_end > gate_left):
@@ -174,8 +182,6 @@ while(1):
 						if (vehicle_id != 0):
 							break
 					if ( vehicle_id != 0) :
-						print("{} {} {} {} 1".format(vehicle_id, framenum, block_start, block_end)) # left is '1'
-						
 						# find the height
 						height_start= 99999999 
 						height_end= 0
@@ -186,12 +192,12 @@ while(1):
 										height_start= j
 									if (j > height_end):
 										height_end= j
-						
 						start_point = (block_start, height_start)   #CHECKHERE!!
 						end_point = (block_end, height_end)	  #CHECKHERE!!
 						label_point= (block_start+10, height_end-20)
 						cv2.rectangle(image_display, start_point, end_point, (255,36,12), 2) # blue
 						cv2.putText(image_display, str(vehicle_id), label_point, cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,36, 12), 2)
+						print("{} {} {} {} {} {} 1".format(vehicle_id, framenum, block_start, block_end, height_start, height_end)) # left is '1'
 						for n in range(block_start, block_end):
 							image_cue.itemset((3,n,2),  vehicle_id)
 					# right to left
@@ -200,8 +206,6 @@ while(1):
 						if (vehicle_id != 0):
 							break
 					if ( vehicle_id != 0) :
-						print("{} {} {} {} 0".format(vehicle_id, framenum, block_start, block_end)) # right is '0'
-						
 						# find the height
 						height_start= 99999999 
 						height_end= 0
@@ -212,12 +216,12 @@ while(1):
 										height_start= j
 									if (j > height_end):
 										height_end= j
-						
 						start_point = (block_start, height_start) 
 						end_point = (block_end, height_end) 
 						label_point= (block_start+10, height_start+20)
 						cv2.rectangle(image_display, start_point, end_point, (12,36,255), 2) # red
 						cv2.putText(image_display, str(vehicle_id), label_point, cv2.FONT_HERSHEY_SIMPLEX, 0.8, (12,36, 255), 2)
+						print("{} {} {} {} {} {} 0".format(vehicle_id, framenum, block_start, block_end, height_start, height_end)) # right is '0'
 						for n in range(block_start, block_end):
 							image_cue.itemset((5,n,2), vehicle_id)
 							
@@ -237,6 +241,12 @@ while(1):
 		image_cue.itemset((j,gate_left,1) , 255) # green
 		image_cue.itemset((j,gate_right,1) , 255) # green
 	
+	# update the reference background
+	update= update+1
+	if (vehicle_detect==0) and (update>update_interval):
+		update = 0
+		ref= cropped
+	
 	#cv2.imshow('display',image_display)
 	#cv2.imshow('cue',image_cue)
 	image_display_resized=cv2.resize(image_display, (1600,176), interpolation= cv2.INTER_AREA)
@@ -246,13 +256,12 @@ while(1):
 	   
 	dateTimeObj = datetime.now()
 	timestampStr = dateTimeObj.strftime("%H:%M:%S.%f")
-	timestampStr_simple = dateTimeObj.strftime("%H%M%S")
-	print('time: ', timestampStr, "framenum: ", str(framenum));
+	#print('time: ', timestampStr, "framenum: ", str(framenum));
 	
 	k = cv2.waitKey(1) & 0xFF
 	if k== ord("c"):
-		print("saving: "+timestampStr_simple+'-'+str(framenum)+'.png')
-		cv2.imwrite(timestampStr_simple+'-'+str(framenum)+'.png', cropped)
+		print("saving: "+str(framenum).zfill(digit)+'.png')
+		cv2.imwrite(str(framenum).zfill(digit)+'.png', cropped)
 	if k== 27: # esc
 		break
 	
