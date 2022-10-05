@@ -36,15 +36,15 @@ gate_right= cropped_x_stop-block_width # position of ID-assignment gate
 
 cap = cv2.VideoCapture(sys.argv[1])
 ref= cv2.imread(sys.argv[2])
-vsize = (int(stopx-startx), int(stopy-starty))
+vsize = (int((stopx-startx)/4), int((stopy-starty)/4))
 
 temp= ref
 image_prev= ref
 image_display= ref
 #ref = ref[starty:stopy, startx:stopx] # if reference image is not cropped already
 
-out = cv2.VideoWriter(sys.argv[5],cv2.VideoWriter_fourcc(*'MP4V'), 30.0, vsize)
-out2 = cv2.VideoWriter(sys.argv[6],cv2.VideoWriter_fourcc(*'MP4V'), 30.0, vsize)
+out = cv2.VideoWriter(sys.argv[5],cv2.VideoWriter_fourcc(*'MP4V'), 60.0, vsize)
+out2 = cv2.VideoWriter(sys.argv[6],cv2.VideoWriter_fourcc(*'MP4V'), 60.0, vsize)
 
 cap.set(cv2.CAP_PROP_POS_FRAMES, float(sys.argv[3]))
 framenum = int(sys.argv[3])
@@ -52,7 +52,7 @@ update= 0
 
 while(1):
 	#dateTimeObj = datetime.now()
-	#timestampStr = dateTimeObj.strftime("%H:%M:%S.%f")
+	#timestampStr = dateTimeObj.strftime(vh"%H:%M:%S.%f")
 	#print('start: ', timestampStr)
 	ret, frame = cap.read()
 	cropped = frame[starty:stopy, startx:stopx]
@@ -135,7 +135,6 @@ while(1):
 	for i in range(cropped_x_start, cropped_x_stop-1):
 		if (image_cue.item(1,i,0) != 0 or image_cue.item(1,i,1) != 0) and block_start==0:
 			block_start= i
-			vehicle_detect= 1
 		elif (image_cue.item(1,i,0) == 0 and image_cue.item(1,i,1) == 0) and block_end==0:
 			block_end= i
 			#remove spurious lines less than minimum block width
@@ -243,30 +242,35 @@ while(1):
 	
 	# update the reference background
 	update= update+1
+	#print("{}/{} v{}".format(update, update_interval, vehicle_detect))
 	if (vehicle_detect==0) and (update>update_interval):
+		print("{}/{} f{}".format(update, update_interval, framenum))
 		update = 0
 		ref= cropped
 	
 	#cv2.imshow('display',image_display)
 	#cv2.imshow('cue',image_cue)
-	image_display_resized=cv2.resize(image_display, (1600,176), interpolation= cv2.INTER_AREA)
-	image_cue_resized = cv2.resize(image_cue, (1600,176), interpolation = cv2.INTER_AREA)
+	image_display_resized=cv2.resize(image_display, vsize, interpolation= cv2.INTER_AREA)
+	image_cue_resized = cv2.resize(image_cue, vsize, interpolation = cv2.INTER_AREA)
 	cv2.imshow('display',image_display_resized)
 	cv2.imshow('cue',image_cue_resized)
 	   
 	dateTimeObj = datetime.now()
 	timestampStr = dateTimeObj.strftime("%H:%M:%S.%f")
-	#print('time: ', timestampStr, "framenum: ", str(framenum));
+	print('time: ', timestampStr, "framenum: ", str(framenum));
 	
 	k = cv2.waitKey(1) & 0xFF
 	if k== ord("c"):
 		print("saving: "+str(framenum).zfill(digit)+'.png')
 		cv2.imwrite(str(framenum).zfill(digit)+'.png', cropped)
+		ref= cropped
 	if k== 27: # esc
 		break
 	
 	#out.write(image_display)
 	#out2.write(image_cue)
+	out.write(image_display_resized)
+	out2.write(image_cue_resized)
 	
 	
 	#print(framenum)
