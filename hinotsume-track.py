@@ -11,6 +11,7 @@ from skimage import morphology
 from datetime import datetime
 
 THRESHOLD_VAL= 30
+FRAME_STEP= 10
 
 # margin in the actual image, to be cropped
 startx= 880               
@@ -41,13 +42,14 @@ vsize = (int((stopx-startx)/4), int((stopy-starty)/4))
 temp= ref
 image_prev= ref
 image_display= ref
-#ref = ref[starty:stopy, startx:stopx] # if reference image is not cropped already
+ref = ref[starty:stopy, startx:stopx] # if reference image is not cropped already
 
 out = cv2.VideoWriter(sys.argv[5],cv2.VideoWriter_fourcc(*'MP4V'), 60.0, vsize)
 out2 = cv2.VideoWriter(sys.argv[6],cv2.VideoWriter_fourcc(*'MP4V'), 60.0, vsize)
 
 cap.set(cv2.CAP_PROP_POS_FRAMES, float(sys.argv[3]))
 framenum = int(sys.argv[3])
+FRAME_STEP= int(sys.argv[7])
 update= 0
 
 while(1):
@@ -74,7 +76,7 @@ while(1):
 	#timestampStr = dateTimeObj.strftime("%H:%M:%S.%f")
 	#print('crop: ', timestampStr)
 	
-	#remove thin horizontal line (such as cables)
+	#remove thin horizontal line (such as cables) ## PERHAPS VERTICAL TOO
 	for i in range(cropped_x_start, cropped_x_stop-1):
 		blobstart= 0
 		blobend= 0
@@ -132,6 +134,7 @@ while(1):
 	vehicle_detect= 0
 	
 	image_display= cropped
+	
 	for i in range(cropped_x_start, cropped_x_stop-1):
 		if (image_cue.item(1,i,0) != 0 or image_cue.item(1,i,1) != 0) and block_start==0:
 			block_start= i
@@ -143,18 +146,17 @@ while(1):
 					image_cue.itemset((1,n,0) , 0) # blue
 					image_cue.itemset((1,n,1) , 0) # green
 					image_cue.itemset((1,n,2) , 0) # red
-			else: 
-				vehicle_detect= 1
 			
 			# apply identifier
 			elif (block_start!= 0) and (block_end != 0):
+				vehicle_detect= 1
 				# from right: red: 1 to 99
 				# from left: 101 to 200
 				# print("{} start{} stop{}".format(framenum, block_start, block_end))
-			
-			#from left gate, line3
+				
+				#from left gate, line3
 				if (block_start < gate_left) and (block_end > gate_left):
-					vehicle_id=  image_prev.item(3, int((block_start + block_end)/2) ,2) # this is not robust
+					vehicle_id=  image_prev.item(3, int((block_start + block_end)/2) ,2)
 					if (vehicle_id == 0) :
 						vehicle_id= random.randint(1, 99)
 						#if (image_prev.item(3, int((block_start + block_end)/2) ,2] == 0):
@@ -164,7 +166,7 @@ while(1):
 				
 				# from right gate, line5
 				elif (block_start < gate_right) and (block_end > gate_right):
-					vehicle_id= image_prev.item(5, int((block_start + block_end)/2) ,2) # this is not robust
+					vehicle_id= image_prev.item(5, int((block_start + block_end)/2) ,2)
 					if (vehicle_id == 0) :
 						vehicle_id= random.randint(101, 199)
 						#if (image_prev.item(2, int((block_start + block_end)/2) ,2] == 0):
@@ -242,7 +244,7 @@ while(1):
 		image_cue.itemset((j,gate_right,1) , 255) # green
 	
 	# update the reference background
-	update= update+1
+	update= update+FRAME_STEP
 	#print("{}/{} v{}".format(update, update_interval, vehicle_detect))
 	if (vehicle_detect==0) and (update>update_interval):
 		print("{}/{} f{}".format(update, update_interval, framenum))
@@ -258,7 +260,6 @@ while(1):
 	   
 	dateTimeObj = datetime.now()
 	timestampStr = dateTimeObj.strftime("%H:%M:%S.%f")
-	print('time: ', timestampStr, "framenum: ", str(framenum));
 	
 	k = cv2.waitKey(1) & 0xFF
 	if k== ord("c"):
@@ -270,12 +271,13 @@ while(1):
 	
 	#out.write(image_display)
 	#out2.write(image_cue)
-	out.write(image_display_resized)
-	out2.write(image_cue_resized)
+	#out.write(image_display_resized)
+	#out2.write(image_cue_resized)
 	
+	print('time: ', timestampStr, "framenum: ", str(framenum));
+	framenum += FRAME_STEP
+	cap.set(cv2.CAP_PROP_POS_FRAMES, float(framenum))
 	
-	#print(framenum)
-	framenum += 1
 	if framenum> int(sys.argv[4]):
 		break
 	
