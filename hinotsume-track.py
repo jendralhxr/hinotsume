@@ -143,17 +143,18 @@ while(1):
 					image_cue.itemset((1,n,0) , 0) # blue
 					image_cue.itemset((1,n,1) , 0) # green
 					image_cue.itemset((1,n,2) , 0) # red
+			else: 
+				vehicle_detect= 1
 			
 			# apply identifier
 			elif (block_start!= 0) and (block_end != 0):
 				# from right: red: 1 to 99
 				# from left: 101 to 200
 				# print("{} start{} stop{}".format(framenum, block_start, block_end))
-				vehicle_detect= 1
-				
-				#from left gate, line3
+			
+			#from left gate, line3
 				if (block_start < gate_left) and (block_end > gate_left):
-					vehicle_id=  image_prev.item(3, int((block_start + block_end)/2) ,2)
+					vehicle_id=  image_prev.item(3, int((block_start + block_end)/2) ,2) # this is not robust
 					if (vehicle_id == 0) :
 						vehicle_id= random.randint(1, 99)
 						#if (image_prev.item(3, int((block_start + block_end)/2) ,2] == 0):
@@ -163,7 +164,7 @@ while(1):
 				
 				# from right gate, line5
 				elif (block_start < gate_right) and (block_end > gate_right):
-					vehicle_id= image_prev.item(5, int((block_start + block_end)/2) ,2)
+					vehicle_id= image_prev.item(5, int((block_start + block_end)/2) ,2) # this is not robust
 					if (vehicle_id == 0) :
 						vehicle_id= random.randint(101, 199)
 						#if (image_prev.item(2, int((block_start + block_end)/2) ,2] == 0):
