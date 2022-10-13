@@ -33,8 +33,8 @@ update_interval= 200 # frames
 
 digit=8;
 
-gate_left=  cropped_x_start+block_width # position of ID-assignment gate
-gate_right= cropped_x_stop-block_width # position of ID-assignment gate
+gate_left=  cropped_x_start+block_width+thickness_min_horizontal # position of ID-assignment gate
+gate_right= cropped_x_stop-block_width-thickness_min_horizontal # position of ID-assignment gate
 
 cap = cv2.VideoCapture(sys.argv[1])
 ref= cv2.imread(sys.argv[2])
