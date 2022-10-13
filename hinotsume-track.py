@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/python3 -u
 # python hinotsume-track.py input-video.mp4 reference-image.png 0 82100 label.mp4  cue.mp4
 # 00000.MTS starts at 400
 # 00001.MTS starts at 0
@@ -13,6 +13,7 @@ from datetime import datetime
 
 THRESHOLD_VAL= 30
 FRAME_STEP= 10
+DIFF_THRESHOLD= 62000.0 
 
 # margin in the actual image, to be cropped
 startx= 0              
@@ -245,8 +246,9 @@ while(1):
 	# update the reference background
 	# anticipate the dangling reference image
 	update= update+FRAME_STEP
-	#print("{}/{} v{}".format(update, update_interval, vehicle_detect))
-	if ((vehicle_detect==0) and (update>update_interval) and (cv2.sumElems(image_cue)[1] < 64000.0)):
+	difval= cv2.sumElems(image_cue)[1]
+#	print("{} {}/{} {} d{}".format(framenum, update, update_interval, vehicle_detect, difval))
+	if ((vehicle_detect==0) and (update>update_interval) and (difval < DIFF_THRESHOLD)):
 		#print("{}/{} f{}".format(update, update_interval, framenum))
 		update = 0
 		ref= frame
