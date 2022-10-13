@@ -29,12 +29,12 @@ cropped_y_stop= 120
 thickness_min_horizontal= 30 # maximum width of bondo
 thickness_min_vertical= 10 # maximum width of bondo
 block_width= 100 # minimum width of vehicle
-update_interval= 200 # frames
+update_interval= 100 # frames
 
 digit=8;
 
-gate_left=  cropped_x_start+block_width+thickness_min_horizontal # position of ID-assignment gate
-gate_right= cropped_x_stop-block_width-thickness_min_horizontal # position of ID-assignment gate
+gate_left=  cropped_x_start+block_width-thickness_min_horizontal # position of ID-assignment gate
+gate_right= cropped_x_stop-block_width+thickness_min_horizontal # position of ID-assignment gate
 
 cap = cv2.VideoCapture(sys.argv[1])
 ref= cv2.imread(sys.argv[2])
@@ -270,6 +270,11 @@ while(1):
 		ref= frame
 	if k== 27: # esc
 		break
+	
+	# fix the dangling reference image
+	#print(str(cv2.sumElems(image_cue)[1]))
+	if (cv2.sumElems(image_cue)[1] > 64000.0):
+		ref= frame
 	
 	out.write(image_display)
 	out2.write(image_cue)
