@@ -273,7 +273,7 @@ while(1):
 	
 	# fix the dangling reference image
 	#print(str(cv2.sumElems(image_cue)[1]))
-	if (cv2.sumElems(image_cue)[1] > 64000.0):
+	if (cv2.sumElems(ref)[1] > 64000.0):
 		ref= frame
 	
 	out.write(image_display)
