@@ -39,7 +39,7 @@ gate_right= cropped_x_stop-block_width+thickness_min_horizontal # position of ID
 
 cap = cv2.VideoCapture(sys.argv[1])
 ref= cv2.imread(sys.argv[2])
-vsize = (int((stopx-startx)/4), int((stopy-starty)/4))
+vsize = (int((stopx-startx)), int((stopy-starty)))
 
 temp= ref
 cue_prev= ref
@@ -47,8 +47,8 @@ frame_prev= ref
 image_display= ref
 #ref = ref[starty:stopy, startx:stopx] # if reference image is not cropped already
 
-out = cv2.VideoWriter(sys.argv[5],cv2.VideoWriter_fourcc(*'MP4V'), 60.0, vsize)
-out2 = cv2.VideoWriter(sys.argv[6],cv2.VideoWriter_fourcc(*'MP4V'), 60.0, vsize)
+out = cv2.VideoWriter(sys.argv[5],cv2.VideoWriter_fourcc(*'mp4v'), 25.0, vsize)
+out2 = cv2.VideoWriter(sys.argv[6],cv2.VideoWriter_fourcc(*'mp4v'), 25.0, vsize)
 
 cap.set(cv2.CAP_PROP_POS_FRAMES, float(sys.argv[3]))
 framenum = int(sys.argv[3])
