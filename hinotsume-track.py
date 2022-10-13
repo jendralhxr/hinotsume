@@ -243,9 +243,10 @@ while(1):
 		image_cue.itemset((j,gate_right,1) , 255) # green
 	
 	# update the reference background
+	# anticipate the dangling reference image
 	update= update+FRAME_STEP
 	#print("{}/{} v{}".format(update, update_interval, vehicle_detect))
-	if ((vehicle_detect==0) and (update>update_interval)):
+	if ((vehicle_detect==0) and (update>update_interval) and (cv2.sumElems(image_cue)[1] < 64000.0)):
 		#print("{}/{} f{}".format(update, update_interval, framenum))
 		update = 0
 		ref= frame
@@ -270,11 +271,6 @@ while(1):
 		ref= frame
 	if k== 27: # esc
 		break
-	
-	# fix the dangling reference image
-	#print(str(cv2.sumElems(image_cue)[1]))
-	if (cv2.sumElems(ref)[1] > 64000.0):
-		ref= frame
 	
 	out.write(image_display)
 	out2.write(image_cue)
