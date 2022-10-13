@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 # python hinotsume-track.py input-video.mp4 reference-image.png 0 82100 label.mp4  cue.mp4
 # 00000.MTS starts at 400
 # 00001.MTS starts at 0
@@ -7,27 +8,27 @@ import math
 import cv2
 import sys
 import random
-from skimage import morphology
+#from skimage import morphology
 from datetime import datetime
 
 THRESHOLD_VAL= 30
 FRAME_STEP= 10
 
 # margin in the actual image, to be cropped
-startx= 880               
-stopx= 4096
+startx= 0              
+stopx= 804
 starty=0
-stopy= 480
+stopy= 120
 
 # image section to be processed, within cropped area
 cropped_x_start= 0
-cropped_x_stop= 3200 # shorter window makes life easier
+cropped_x_stop= 800 # shorter window makes life easier
 cropped_y_start= 0
-cropped_y_stop= 470
+cropped_y_stop= 120
 
-thickness_min_horizontal= 60 # maximum width of bondo
+thickness_min_horizontal= 30 # maximum width of bondo
 thickness_min_vertical= 10 # maximum width of bondo
-block_width= 300 # minimum width of vehicle
+block_width= 100 # minimum width of vehicle
 update_interval= 200 # frames
 
 digit=8;
@@ -42,7 +43,7 @@ vsize = (int((stopx-startx)/4), int((stopy-starty)/4))
 temp= ref
 image_prev= ref
 image_display= ref
-ref = ref[starty:stopy, startx:stopx] # if reference image is not cropped already
+#ref = ref[starty:stopy, startx:stopx] # if reference image is not cropped already
 
 out = cv2.VideoWriter(sys.argv[5],cv2.VideoWriter_fourcc(*'MP4V'), 60.0, vsize)
 out2 = cv2.VideoWriter(sys.argv[6],cv2.VideoWriter_fourcc(*'MP4V'), 60.0, vsize)
@@ -57,20 +58,14 @@ while(1):
 	#timestampStr = dateTimeObj.strftime(vh"%H:%M:%S.%f")
 	#print('start: ', timestampStr)
 	ret, frame = cap.read()
-	cropped = frame[starty:stopy, startx:stopx]
+	
+#	print(frame.shape)
+#	print(ref.shape)
 	
 	# crop and subtract .item(reference] background
-	difference= cv2.absdiff(ref, cropped)
+	difference= cv2.absdiff(ref, frame)
 	ret,thresh = cv2.threshold(difference,THRESHOLD_VAL,255,cv2.THRESH_BINARY);
-	#image_cue = cv2.bitwise_and(cropped, thresh)
-	
-	cue_morph= morphology.remove_small_objects(thresh, min_size=100, connectivity=10)
-	#print("cropped:", cropped.shape)
-	#print("thresh:", thresh.shape)
-	#print("cue_morph:", cue_morph.shape)
-	
-	image_cue = cv2.bitwise_and(cropped, thresh)
-	image_cue = cv2.bitwise_and(image_cue, cue_morph)
+	image_cue = cv2.bitwise_and(frame, thresh)
 	
 	#dateTimeObj = datetime.now()
 	#timestampStr = dateTimeObj.strftime("%H:%M:%S.%f")
@@ -133,7 +128,7 @@ while(1):
 	block_end= 0
 	vehicle_detect= 0
 	
-	image_display= cropped
+	image_display= frame
 	
 	for i in range(cropped_x_start, cropped_x_stop-1):
 		if (image_cue.item(1,i,0) != 0 or image_cue.item(1,i,1) != 0) and block_start==0:
@@ -149,7 +144,7 @@ while(1):
 			
 			# apply identifier
 			elif (block_start!= 0) and (block_end != 0):
-				vehicle_detect= 1
+				vehicle_detect= vehicle_detect +1
 				# from right: red: 1 to 99
 				# from left: 101 to 200
 				# print("{} start{} stop{}".format(framenum, block_start, block_end))
@@ -159,6 +154,7 @@ while(1):
 					vehicle_id=  image_prev.item(3, int((block_start + block_end)/2) ,2)
 					if (vehicle_id == 0) :
 						vehicle_id= random.randint(1, 99)
+						vehicle_detect= vehicle_detect +1
 						#if (image_prev.item(3, int((block_start + block_end)/2) ,2] == 0):
 						#print("{} {} {} {} leftnew".format(vehicle_id, framenum, block_start, block_end))
 					for n in range(block_start, block_end):
@@ -169,6 +165,7 @@ while(1):
 					vehicle_id= image_prev.item(5, int((block_start + block_end)/2) ,2)
 					if (vehicle_id == 0) :
 						vehicle_id= random.randint(101, 199)
+						vehicle_detect= vehicle_detect +1
 						#if (image_prev.item(2, int((block_start + block_end)/2) ,2] == 0):
 						#print("{} {} {} {} rightnew {}".format(vehicle_id, framenum, block_start, block_end, gate_right))
 					for n in range(block_start, block_end):
@@ -181,6 +178,7 @@ while(1):
 					vehicle_id = 0
 					for n in range(block_start, block_end, 2):
 						vehicle_id = image_prev.item(3, n, 2)
+						vehicle_detect= vehicle_detect +1
 						if (vehicle_id != 0):
 							break
 					if ( vehicle_id != 0) :
@@ -194,17 +192,18 @@ while(1):
 										height_start= j
 									if (j > height_end):
 										height_end= j
-						start_point = (block_start, height_start)   #CHECKHERE!!
-						end_point = (block_end, height_end)	  #CHECKHERE!!
+						start_point = (block_start, height_start)
+						end_point = (block_end, height_end)	
 						label_point= (block_start+10, height_end-20)
-						cv2.rectangle(image_display, start_point, end_point, (255,36,12), 2) # blue
-						cv2.putText(image_display, str(vehicle_id), label_point, cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,36, 12), 2)
+						cv2.rectangle(image_display, start_point, end_point, (255,36,12), 1) # blue
+						cv2.putText(image_display, str(vehicle_id), label_point, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,36, 12), 1)
 						print("{} {} {} {} {} {} 1".format(vehicle_id, framenum, block_start, block_end, height_start, height_end)) # left is '1'
 						for n in range(block_start, block_end):
 							image_cue.itemset((3,n,2),  vehicle_id)
 					# right to left
 					for n in range(block_end, block_start, -2):
 						vehicle_id = image_prev.item(5, n, 2)
+						vehicle_detect= vehicle_detect +1
 						if (vehicle_id != 0):
 							break
 					if ( vehicle_id != 0) :
@@ -221,8 +220,8 @@ while(1):
 						start_point = (block_start, height_start) 
 						end_point = (block_end, height_end) 
 						label_point= (block_start+10, height_start+20)
-						cv2.rectangle(image_display, start_point, end_point, (12,36,255), 2) # red
-						cv2.putText(image_display, str(vehicle_id), label_point, cv2.FONT_HERSHEY_SIMPLEX, 0.8, (12,36, 255), 2)
+						cv2.rectangle(image_display, start_point, end_point, (12,36,255), 1) # red
+						cv2.putText(image_display, str(vehicle_id), label_point, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (12,36, 255), 1)
 						print("{} {} {} {} {} {} 0".format(vehicle_id, framenum, block_start, block_end, height_start, height_end)) # right is '0'
 						for n in range(block_start, block_end):
 							image_cue.itemset((5,n,2), vehicle_id)
@@ -246,17 +245,17 @@ while(1):
 	# update the reference background
 	update= update+FRAME_STEP
 	#print("{}/{} v{}".format(update, update_interval, vehicle_detect))
-	if (vehicle_detect==0) and (update>update_interval):
-		print("{}/{} f{}".format(update, update_interval, framenum))
+	if ((vehicle_detect==0) and (update>update_interval)):
+		#print("{}/{} f{}".format(update, update_interval, framenum))
 		update = 0
-		ref= cropped
+		ref= frame
 	
-	#cv2.imshow('display',image_display)
-	#cv2.imshow('cue',image_cue)
-	image_display_resized=cv2.resize(image_display, vsize, interpolation= cv2.INTER_AREA)
-	image_cue_resized = cv2.resize(image_cue, vsize, interpolation = cv2.INTER_AREA)
-	cv2.imshow('display',image_display_resized)
-	cv2.imshow('cue',image_cue_resized)
+	cv2.imshow('display',image_display)
+	cv2.imshow('cue',image_cue)
+	#image_display_resized=cv2.resize(image_display, vsize, interpolation= cv2.INTER_AREA)
+	#image_cue_resized = cv2.resize(image_cue, vsize, interpolation = cv2.INTER_AREA)
+	#cv2.imshow('display',image_display_resized)
+	#cv2.imshow('cue',image_cue_resized)
 	   
 	dateTimeObj = datetime.now()
 	timestampStr = dateTimeObj.strftime("%H:%M:%S.%f")
@@ -264,17 +263,20 @@ while(1):
 	k = cv2.waitKey(1) & 0xFF
 	if k== ord("c"):
 		print("saving: "+str(framenum).zfill(digit)+'.png')
-		cv2.imwrite(str(framenum).zfill(digit)+'.png', cropped)
-		ref= cropped
+		cv2.imwrite(str(framenum).zfill(digit)+'.png', frame)
+	if k== ord("r"):
+		print("reference: "+str(framenum).zfill(digit)+'.png')
+		cv2.imwrite(str(framenum).zfill(digit)+'.png', frame)
+		ref= frame
 	if k== 27: # esc
 		break
 	
-	#out.write(image_display)
-	#out2.write(image_cue)
+	out.write(image_display)
+	out2.write(image_cue)
 	#out.write(image_display_resized)
 	#out2.write(image_cue_resized)
 	
-	print('time: ', timestampStr, "framenum: ", str(framenum));
+	#print('time: ', timestampStr, "framenum: ", str(framenum));
 	framenum += FRAME_STEP
 	cap.set(cv2.CAP_PROP_POS_FRAMES, float(framenum))
 	
