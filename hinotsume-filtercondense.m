@@ -116,7 +116,7 @@ for i=2:size(raw,1)
         traffic(n,4)= raw(start, COL_DIRECTION);                          # direction
         traffic(n,5)= mean(raw(start:stop, COL_WIDTH));                   # width
         traffic(n,6)= mean(raw(start:stop, COL_HEIGHT));                  # height
-        #traffic(n,6)= raw(start, COL_POSITION);                           # initial position
+        #traffic(n,6)= raw(start, COL_POSITION);                          # initial position
         traffic(n,7)= pos_max;                                            # rightmost position
         traffic(n,8)= pos_min;                                            # leftmost position
         

@@ -202,7 +202,7 @@ while(1):
 						label_point= (block_start+10, height_end-20)
 						cv2.rectangle(image_display, start_point, end_point, (255,36,12), 1) # blue
 						cv2.putText(image_display, str(vehicle_id), label_point, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,36, 12), 1)
-						print("{} {} {} {} {} {} 1".format(vehicle_id, framenum, block_start, block_end, height_start, height_end)) # left is '1'
+						print("{} {} {} {} {} {} 1".format(vehicle_id, framenum, block_start, block_end-thickness_min_horizontal, height_start, height_end)) # left is '1'
 						for n in range(block_start, block_end):
 							cue_current.itemset((3,n,2),  vehicle_id)
 					# right to left
@@ -227,7 +227,7 @@ while(1):
 						label_point= (block_start+10, height_start+20)
 						cv2.rectangle(image_display, start_point, end_point, (12,36,255), 1) # red
 						cv2.putText(image_display, str(vehicle_id), label_point, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (12,36, 255), 1)
-						print("{} {} {} {} {} {} 0".format(vehicle_id, framenum, block_start, block_end, height_start, height_end)) # right is '0'
+						print("{} {} {} {} {} {} 0".format(vehicle_id, framenum, block_start, block_end-thickness_min_horizontal, height_start, height_end)) # right is '0'
 						for n in range(block_start, block_end):
 							cue_current.itemset((5,n,2), vehicle_id)
 							
