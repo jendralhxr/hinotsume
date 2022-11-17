@@ -1,42 +1,60 @@
 # video0 is 82381 frames
 # video1 is 82494 frames
+# 1     2       3       4           5         6           7
+#ID,framenum,edge_left,edge_right,edge_bot,edge_top,direction
+raw=dlmread("jumat.csv","\t");
 
 COL_ID                =1;
 COL_FRAMENUM    =2;
-COL_START            =3;
-COL_STOP         =4;
-COL_DIRECTION     =5; # right is 0, left is 1
-COL_WIDTH            =6;
-COL_POSITION        =7;
-
+COL_EDGE_LEFT            =3;
+COL_EDGE_RIGHT         =4;
+COL_EDGE_BOT	= 5;
+COL_EDGE_TOP = 6;
+COL_DIRECTION     =7; # right is 0, left is 1traf
+COL_POSITION        =8;
+COL_WIDTH            =9;
+COL_HEIGHT	= 10
 load logsorted.txt
 
 #calculate the width and center position of vehicle
 for i=1:size(raw,1)
-    raw(i, COL_WIDTH)= raw(i, COL_STOP) - raw(i, COL_START);
-    raw(i, COL_POSITION)= (raw(i, COL_STOP) + raw(i, COL_START)) /2;
+    raw(i, COL_POSITION)= (raw(i, COL_EDGE_RIGHT) + raw(i, COL_EDGE_LEFT)) /2;
+    raw(i, COL_WIDTH)= raw(i, COL_EDGE_RIGHT) - raw(i, COL_EDGE_LEFT);
+	raw(i, COL_HEIGHT)= raw(i, COL_EDGE_TOP) - raw(i, COL_EDGE_BOT);
 endfor
 
-# remove entries from overlapping lane detection 
-# repeat until clear
+#remove the width of padding (in px)
+raw(:,COL_WIDTH) -= 30; 
+#raw(:,COL_HEIGHT) -= 10; 
+
+# filter out entries during full-overlap 
+# repeat until clear and the table no longer shrinks
 raw= sortrows(raw, [2 1]);
-for i=1:size(raw,1)
- if    (raw(i,COL_FRAMENUM)== raw(i+1,COL_FRAMENUM)) &&    (raw(i,COL_START)     == raw(i+1,COL_START)) && (raw(i,COL_STOP)== raw(i+1,COL_STOP))
+for i=1:size(raw,1)-3
+ if    (raw(i,COL_FRAMENUM)== raw(i+1,COL_FRAMENUM)) && (raw(i,COL_EDGE_LEFT)== raw(i+1,COL_EDGE_LEFT)) && (raw(i,COL_EDGE_RIGHT)== raw(i+1,COL_EDGE_RIGHT))
  raw(i:i+1,:)=[];
  endif
 endfor
 
-#remove the width of padding (in px)
-raw(:,COL_WIDTH) -= 10; 
+# filter out non-moving artifact 
+# repeat until clear and the table no longer shrinks
+raw= sortrows(raw, [2 1]);
+for i=1:size(raw,1)-1
+ if    (raw(i,COL_ID)== raw(i+1,COL_ID)) && (raw(i,COL_EDGE_LEFT)== raw(i+1,COL_EDGE_LEFT)) && (raw(i,COL_EDGE_RIGHT)== raw(i+1,COL_EDGE_RIGHT))
+ raw(i:i+1,:)=[];
+ endif
+endfor
 
-#--------- filter post-overlap passes
+
+#raw=dlmread("tre.txt","\t");
+
+# select entries after overlap, based on the retained ID and travel direction
 # for each segement with the same frame number, find the position of that particular ID 
 # from previous segment (increment track back)
 # discard the frame based 
 # iterate in one increment
 
 raw= sortrows(raw, [2 1]);
-
 i=1;
 while i<size(raw,1)
     if (raw(i, COL_FRAMENUM) == raw(i+1, COL_FRAMENUM)) && (raw(i, COL_ID) == raw(i+1, COL_ID))
@@ -48,8 +66,8 @@ while i<size(raw,1)
             #-----
             for j=1:20
                 if (raw(i-j, COL_ID) == TEMP_ID) && (raw(i-j, COL_ID) < TEMP_FRAMENUM) # found the duplicate
-                    printf("dup %d at %d-%d\n", raw(i, COL_ID), i, j);
-                    
+                    printf("dup %d at %d-%d on %d\n", raw(i, COL_ID), i, j, TEMP_FRAMENUM);
+                    #raw(i,:)= [];
                     if (raw(i, COL_ID) < 100) && (raw(i, COL_POSITION) <= raw(i-j, COL_POSITION))
                         printf("dela %d %d/%d %d-%d\n", raw(i, COL_ID), raw(i, COL_POSITION), raw(i-j, COL_POSITION), i, j);
                         raw(i,:)= [];
@@ -81,25 +99,26 @@ save logbersih.txt raw
 
 #----- calculating traffic passes 
 raw= sortrows(raw, [1 2]);
-POS_JUMP= 240;
+POS_JUMP= 240; # a single pass should no be longer than 240 frames
 
 clear traffic;
 start= 1;
 n=1;
 pos_max= 0;
-pos_min= 1000;
+pos_min= 5000;
 for i=2:size(raw,1)
     if (raw(start,COL_ID) != raw(i,COL_ID)) || (raw(start,COL_DIRECTION) != raw(i,COL_DIRECTION)) ||    (( abs (raw(i,COL_FRAMENUM) - raw(i-1,COL_FRAMENUM))) > POS_JUMP )
         stop= i-1;
         
-        traffic(n,1)= raw(start, COL_ID);
-        traffic(n,2)= raw(start, COL_FRAMENUM);
-        traffic(n,3)= raw(stop, COL_FRAMENUM) - raw(start, COL_FRAMENUM);
-        traffic(n,4)= raw(start, COL_DIRECTION);
-        traffic(n,5)= mean(raw(start:stop, COL_WIDTH));
-        traffic(n,6)= raw(start, COL_POSITION);
-        traffic(n,7)= pos_max;
-        traffic(n,8)= pos_min;
+        traffic(n,1)= raw(start, COL_ID);                                 # ID
+        traffic(n,2)= raw(start, COL_FRAMENUM);                           # pass time
+        traffic(n,3)= raw(stop, COL_FRAMENUM) - raw(start, COL_FRAMENUM); # pass duration
+        traffic(n,4)= raw(start, COL_DIRECTION);                          # direction
+        traffic(n,5)= mean(raw(start:stop, COL_WIDTH));                   # width
+        traffic(n,6)= mean(raw(start:stop, COL_HEIGHT));                  # height
+        #traffic(n,6)= raw(start, COL_POSITION);                           # initial position
+        traffic(n,7)= pos_max;                                            # rightmost position
+        traffic(n,8)= pos_min;                                            # leftmost position
         
         start=i;
         pos_max= 0;

@@ -11,7 +11,7 @@ import random
 #from skimage import morphology
 from datetime import datetime
 
-THRESHOLD_VAL= 30
+THRESHOLD_VAL= 40
 FRAME_STEP= 10
 DIFF_THRESHOLD= 62000.0 
 
@@ -198,7 +198,7 @@ while(1):
 									if (j > height_end):
 										height_end= j
 						start_point = (block_start, height_start)
-						end_point = (block_end, height_end)	
+						end_point = (block_end-thickness_min_horizontal, height_end)	# for aesthetic
 						label_point= (block_start+10, height_end-20)
 						cv2.rectangle(image_display, start_point, end_point, (255,36,12), 1) # blue
 						cv2.putText(image_display, str(vehicle_id), label_point, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,36, 12), 1)
@@ -223,7 +223,7 @@ while(1):
 									if (j > height_end):
 										height_end= j
 						start_point = (block_start, height_start) 
-						end_point = (block_end, height_end) 
+						end_point = (block_end-thickness_min_horizontal, height_end)  # for aesthetic purpose
 						label_point= (block_start+10, height_start+20)
 						cv2.rectangle(image_display, start_point, end_point, (12,36,255), 1) # red
 						cv2.putText(image_display, str(vehicle_id), label_point, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (12,36, 255), 1)
@@ -282,7 +282,6 @@ while(1):
 	
 	cv2.imshow('display',image_display)
 	cv2.imshow('cue',cue_current)
-	cv2.imshow('ref',ref)
 	#image_display_resized=cv2.resize(image_display, vsize, interpolation= cv2.INTER_AREA)
 	#cue_current_resized = cv2.resize(cue_current, vsize, interpolation = cv2.INTER_AREA)
 	#cv2.imshow('display',image_display_resized)
@@ -291,10 +290,11 @@ while(1):
 	k = cv2.waitKey(1) & 0xFF
 	if k== ord("c"):
 		print("saving: "+str(framenum).zfill(digit)+'.png')
-		cv2.imwrite(str(framenum).zfill(digit)+'.png', frame)
+		#cv2.imwrite(str(framenum).zfill(digit)+'.png', frame)
 	if k== ord("r"):
 		print("reference: "+str(framenum).zfill(digit)+'.png')
-		cv2.imwrite(str(framenum).zfill(digit)+'.png', frame)
+		cv2.imshow('ref',ref)
+		#cv2.imwrite(str(framenum).zfill(digit)+'.png', frame)
 		ref= frame
 	if k== 27: # esc
 		break
