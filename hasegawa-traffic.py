@@ -10,7 +10,7 @@ import csv
 framenum= 0
 THRESH_VAL= 40
 STEP= 3
-BLOB_DISTANCE= 100.0
+BLOB_DISTANCE= 200.0
 k=0
 
 def calculate_contour_distance(contour1, contour2): 
@@ -27,7 +27,7 @@ def calculate_contour_distance(contour1, contour2):
 def merge_contours(contour1, contour2):
     return np.concatenate((contour1, contour2), axis=0)
 
-def agglomerative_cluster(contours, threshold_distance=100.0):
+def agglomerative_cluster(contours, threshold_distance=BLOB_DISTANCE):
     current_contours = contours
     while len(current_contours) > 1:
         min_distance = None
