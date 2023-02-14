@@ -70,7 +70,15 @@ while(1):
 	# crop and subtract .item(reference] background
 	difference= cv2.absdiff(ref, frame)
 	ret,thresh = cv2.threshold(difference,THRESHOLD_VAL,255,cv2.THRESH_BINARY);
+                                              
+ 
+                                                                                  
+                                  
+                                
+                                      
+ 
 	cue_current = cv2.bitwise_and(frame, thresh)
+                                                  
 	
 	#dateTimeObj = datetime.now()
 	#timestampStr = dateTimeObj.strftime("%H:%M:%S.%f")
@@ -234,6 +242,11 @@ while(1):
 			block_start= 0
 			block_end= 0
 	
+                              
+                                                    
+                                  
+ 
+                       
 
 	
 	#draw the gate
@@ -248,6 +261,8 @@ while(1):
 	# - update if "calm sequence" is found
 	# - stalling reference image w/ artifact
 	ref_update= ref_update+FRAME_STEP
+            
+              
 	
 	diff_val_prev= diff_val
 	diff_val= cv2.sumElems(cue_current)[1]
