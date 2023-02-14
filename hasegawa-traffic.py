@@ -1,4 +1,4 @@
-# python -u hasetraffic.py video.mp4 24000000000000 log.csv
+# python -u hasetraffic.py  video.mp4 24000000000000 log.csv
 # agglomerative contour clustering thanks to CullenSUN https://gist.githubusercontent.com/CullenSUN/d325c1c321667aab513a5e9731bda3f1/raw/879815eca2a5df9ff30ec646ab9ccd20c834015b/contours_clustering.py
 
 import math
@@ -6,6 +6,12 @@ import cv2 as cv
 import numpy as np
 import sys
 import csv
+
+framenum= 0
+THRESH_VAL= 40
+STEP= 3
+BLOB_DISTANCE= 100.0
+k=0
 
 def calculate_contour_distance(contour1, contour2): 
     x1, y1, w1, h1 = cv.boundingRect(contour1)
@@ -50,12 +56,6 @@ def take_biggest_contours(contours, max_number=20):
     sorted_contours = sorted(contours, key=lambda x: cv.contourArea(x), reverse=True)
     return sorted_contours[:max_number]    
   
-framenum= 0
-THRESH_VAL= 40
-STEP= 3
-
-k=0
-
 cap = cv.VideoCapture(sys.argv[1])
 height = int(cap.get(cv.CAP_PROP_FRAME_WIDTH));
 width = int(cap.get(cv.CAP_PROP_FRAME_HEIGHT));
@@ -67,11 +67,14 @@ writer = csv.writer(csvlog)
 header= ['framenum','m00','m10','m01']
 writer.writerow(header);
 
+#traffic = cv.VideoWriter(sys.argv[4], 0, 100.0, (height, width))
+traffic = cv.VideoWriter(sys.argv[4],cv.VideoWriter_fourcc(*'MP4V'), 100.0, (height, width))
+
 while (framenum<lastframe):
     ret, frame_col = cap.read()
     framenum += 1
     frame = cv.cvtColor(frame_col, cv.COLOR_BGR2GRAY)
-    #print(ref.shape)
+    #print(frame.shape)
     tee = cv.bitwise_not(frame)
     ret,cue = cv.threshold(tee,10,255,cv.THRESH_BINARY);
     M = cv.moments(cue)
@@ -79,34 +82,39 @@ while (framenum<lastframe):
     contours,hierarchy = cv.findContours(cue, 1, 2)
     #cv.drawContours(cue, contours, -1, (255), 20)
     #cv.drawContours(frame_col, contours, -1, (0, 255, 0), 3)
+    
     contours = take_biggest_contours(contours)
     #print("contours after take_biggest_contours: %s" % len(contours))
+
     contours = agglomerative_cluster(contours)
     #print("contours after agglomerative_cluster: %s" % len(contours))
 
-    numlist= [framenum, M["m00"], M["m10"], M["m01"],  ];
+    
+    numlist= [framenum, M["m00"], M["m10"], M["m01"], len(contours)];
     
     objects = []
     for c in contours:
         rect = cv.boundingRect(c)
         x, y, w, h = rect
+        cv.rectangle(frame_col,(x,y),(x+w,y+h),(0,255,0), 2)
         numlist.append([x, y, w, h])
         objects.append(rect)
     
     #if (len(objects)):
     #numlist= [framenum, M["m00"], M["m10"], M["m01"], topmost, bottommost, leftmost, rightmost];
-    writer.writerow(numlist);
+    writer.writerow(numlist)
+    traffic.write(frame_col)
     
-    #if (framenum):
-    if (framenum%50 == 0):
+    # if (framenum):
+    if (framenum%500 == 0):
         print("{} {} {}".format(framenum, M["m00"], len(objects)))
-        #display=cv.resize(frame_col, vsize, interpolation= cv.INTER_AREA)
-        #cv.imshow('display',frame_col)
-      #  cv.imshow('display',cue)
-       # k = cv.waitKey(1) & 0xFF
+        # display=cv.resize(frame_col, vsize, interpolation= cv.INTER_AREA)
+        # cv.imshow('display',frame_col)
+        # cv.imshow('display',cue)
+        # k = cv.waitKey(1) & 0xFF
     
     # if k== 27: # esc
         # break
     
-    
+traffic.release
 cap.release
