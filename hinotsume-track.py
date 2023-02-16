@@ -1,5 +1,5 @@
 #!/usr/bin/python3 -u
-# python hinotsume-track.py input-video.mp4 reference-image.png 0 82100 label.mp4  cue.mp4
+# python hinotsume-track.py input-video.mp4 reference-image.png 0 82100 label.mp4 cue.mp4 framestep | tee passes.log
 # 00000.MTS starts at 400
 # 00001.MTS starts at 0
 
@@ -17,19 +17,19 @@ DIFF_THRESHOLD= 62000.0
 
 # margin in the actual image, to be cropped
 startx= 0              
-stopx= 804
+stopx= 2048
 starty=0
-stopy= 120
+stopy= 72
 
 # image section to be processed, within cropped area
 cropped_x_start= 0
-cropped_x_stop= 800 # shorter window makes life easier
+cropped_x_stop= 2048 # shorter window makes life easier
 cropped_y_start= 0
-cropped_y_stop= 120
+cropped_y_stop= 72
 
 thickness_min_horizontal= 30 # maximum width of bondo
-thickness_min_vertical= 10 # maximum width of bondo
-block_width= 100 # minimum width of vehicle
+thickness_min_vertical= 10 # maximum height of bondo
+block_width= 160 # minimum width of vehicle
 update_interval= 50 # frames
 
 digit=8;
@@ -47,8 +47,8 @@ frame_prev= ref
 image_display= ref
 #ref = ref[starty:stopy, startx:stopx] # if reference image is not cropped already
 
-out = cv2.VideoWriter(sys.argv[5],cv2.VideoWriter_fourcc(*'mp4v'), 25.0, vsize)
-out2 = cv2.VideoWriter(sys.argv[6],cv2.VideoWriter_fourcc(*'mp4v'), 25.0, vsize)
+out = cv2.VideoWriter(sys.argv[5],cv2.VideoWriter_fourcc(*'mp4v'), 200.0, vsize)
+out2 = cv2.VideoWriter(sys.argv[6],cv2.VideoWriter_fourcc(*'mp4v'), 200.0, vsize)
 
 cap.set(cv2.CAP_PROP_POS_FRAMES, float(sys.argv[3]))
 framenum = int(sys.argv[3])
@@ -70,15 +70,7 @@ while(1):
 	# crop and subtract .item(reference] background
 	difference= cv2.absdiff(ref, frame)
 	ret,thresh = cv2.threshold(difference,THRESHOLD_VAL,255,cv2.THRESH_BINARY);
-                                              
- 
-                                                                                  
-                                  
-                                
-                                      
- 
 	cue_current = cv2.bitwise_and(frame, thresh)
-                                                  
 	
 	#dateTimeObj = datetime.now()
 	#timestampStr = dateTimeObj.strftime("%H:%M:%S.%f")
@@ -242,11 +234,6 @@ while(1):
 			block_start= 0
 			block_end= 0
 	
-                              
-                                                    
-                                  
- 
-                       
 
 	
 	#draw the gate
@@ -261,8 +248,6 @@ while(1):
 	# - update if "calm sequence" is found
 	# - stalling reference image w/ artifact
 	ref_update= ref_update+FRAME_STEP
-            
-              
 	
 	diff_val_prev= diff_val
 	diff_val= cv2.sumElems(cue_current)[1]
@@ -295,24 +280,25 @@ while(1):
 	cue_prev= cue_current;
 	frame_prev= frame;
 	
-	cv2.imshow('display',image_display)
-	cv2.imshow('cue',cue_current)
-	#image_display_resized=cv2.resize(image_display, vsize, interpolation= cv2.INTER_AREA)
+	#cv2.imshow('display',image_display)
+	#cv2.imshow('cue',cue_current)
+	
+    #image_display_resized=cv2.resize(image_display, vsize, interpolation= cv2.INTER_AREA)
 	#cue_current_resized = cv2.resize(cue_current, vsize, interpolation = cv2.INTER_AREA)
 	#cv2.imshow('display',image_display_resized)
 	#cv2.imshow('cue',cue_current_resized)
 	
-	k = cv2.waitKey(1) & 0xFF
-	if k== ord("c"):
-		print("saving: "+str(framenum).zfill(digit)+'.png')
-		#cv2.imwrite(str(framenum).zfill(digit)+'.png', frame)
-	if k== ord("r"):
-		print("reference: "+str(framenum).zfill(digit)+'.png')
-		cv2.imshow('ref',ref)
-		#cv2.imwrite(str(framenum).zfill(digit)+'.png', frame)
-		ref= frame
-	if k== 27: # esc
-		break
+	# k = cv2.waitKey(1) & 0xFF
+	# if k== ord("c"):
+		# print("saving: "+str(framenum).zfill(digit)+'.png')
+		# cv2.imwrite('cap'+str(framenum).zfill(digit)+'.png', frame)
+	# if k== ord("r"):
+		# print("reference: "+str(framenum).zfill(digit)+'.png')
+		# cv2.imshow('ref',ref)
+		# cv2.imwrite('ref'+str(framenum).zfill(digit)+'.png', frame)
+		# ref= frame
+	# if k== 27: # esc
+		# break
 	
 	out.write(image_display)
 	out2.write(cue_current)
