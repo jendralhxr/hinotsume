@@ -1,317 +1,183 @@
-#!/usr/bin/python3 -u
-# python hinotsume-track.py input-video.mp4 reference-image.png 0 82100 label.mp4 cue.mp4 framestep | tee passes.log
-# 00000.MTS starts at 400
-# 00001.MTS starts at 0
+# video0 is 82381 frames
+# video1 is 82494 frames
+# 1     2       3       4           5         6           7
+#ID,framenum,edge_left,edge_right,edge_bot,edge_top,direction
+raw=dlmread("jumat.csv","\t");
 
-import numpy as np
-import math
-import cv2
-import sys
-import random
-#from skimage import morphology
-from datetime import datetime
+COL_ID                =1;
+COL_FRAMENUM    =2;
+COL_EDGE_LEFT            =3;
+COL_EDGE_RIGHT         =4;
+COL_EDGE_BOT	= 5;
+COL_EDGE_TOP = 6;
+COL_DIRECTION     =7; # right is 0, left is 1traf
+COL_POSITION        =8;
+COL_WIDTH            =9;
+COL_HEIGHT	= 10;
+load logsorted.txt
 
-THRESHOLD_VAL= 40
-FRAME_STEP= 10
-DIFF_THRESHOLD= 62000.0 
+#calculate the width and center position of vehicle
+for i=1:size(raw,1)
+    raw(i, COL_POSITION)= (raw(i, COL_EDGE_RIGHT) + raw(i, COL_EDGE_LEFT)) /2;
+    raw(i, COL_WIDTH)= raw(i, COL_EDGE_RIGHT) - raw(i, COL_EDGE_LEFT);
+	raw(i, COL_HEIGHT)= raw(i, COL_EDGE_TOP) - raw(i, COL_EDGE_BOT);
+endfor
 
-# margin in the actual image, to be cropped
-startx= 0              
-stopx= 2048
-starty=0
-stopy= 72
+#remove the width of padding (in px)
+raw(:,COL_WIDTH) -= 30; 
+raw(:,COL_HEIGHT) -= 10; 
 
-# image section to be processed, within cropped area
-cropped_x_start= 0
-cropped_x_stop= 2048 # shorter window makes life easier
-cropped_y_start= 0
-cropped_y_stop= 72
+# filter out entries during full-overlap 
+# repeat until clear and the table no longer shrinks
+raw= sortrows(raw, [2 1]);
+for i=1:size(raw,1)-3
+ if    (raw(i,COL_FRAMENUM)== raw(i+1,COL_FRAMENUM)) && (raw(i,COL_EDGE_LEFT)== raw(i+1,COL_EDGE_LEFT)) && (raw(i,COL_EDGE_RIGHT)== raw(i+1,COL_EDGE_RIGHT))
+ raw(i:i+1,:)=[];
+ endif
+endfor
 
-thickness_min_horizontal= 30 # maximum width of bondo
-thickness_min_vertical= 10 # maximum height of bondo
-block_width= 160 # minimum width of vehicle
-update_interval= 50 # frames
+# filter out non-moving artifact 
+# repeat until clear and the table no longer shrinks
+raw= sortrows(raw, [2 1]);
+for i=1:size(raw,1)-1
+ if    (raw(i,COL_ID)== raw(i+1,COL_ID)) && (raw(i,COL_EDGE_LEFT)== raw(i+1,COL_EDGE_LEFT)) && (raw(i,COL_EDGE_RIGHT)== raw(i+1,COL_EDGE_RIGHT))
+ raw(i:i+1,:)=[];
+ endif
+endfor
 
-digit=8;
 
-gate_left=  cropped_x_start+block_width-thickness_min_horizontal # position of ID-assignment gate
-gate_right= cropped_x_stop-block_width+thickness_min_horizontal # position of ID-assignment gate
+#raw=dlmread("tre.txt","\t");
 
-cap = cv2.VideoCapture(sys.argv[1])
-ref= cv2.imread(sys.argv[2])
-vsize = (int((stopx-startx)), int((stopy-starty)))
+# select entries after overlap, based on the retained ID and travel direction
+# for each segement with the same frame number, find the position of that particular ID 
+# from previous segment (increment track back)
+# discard the frame based 
+# iterate in one increment
 
-temp= ref
-cue_prev= ref
-frame_prev= ref
-image_display= ref
-#ref = ref[starty:stopy, startx:stopx] # if reference image is not cropped already
+raw= sortrows(raw, [2 1]);
+i=1;
+while i<size(raw,1)
+    if (raw(i, COL_FRAMENUM) == raw(i+1, COL_FRAMENUM)) && (raw(i, COL_ID) == raw(i+1, COL_ID))
+        TEMP_FRAMENUM= raw(i, COL_FRAMENUM);
+        TEMP_ID= raw(i, COL_ID);
+        fin=1;
+        
+        while (raw(i, COL_FRAMENUM)==TEMP_FRAMENUM) && (raw(i, COL_ID)==TEMP_ID)
+            #-----
+            #for j=1:i-1
+            for j=1:10
+                if (raw(i-j, COL_ID) == TEMP_ID) && (raw(i-j, COL_ID) < TEMP_FRAMENUM) # found the duplicate
+                    printf("dup %d at %d-%d on %d\n", raw(i, COL_ID), i, j, TEMP_FRAMENUM);
+                    raw(i,:)= [];
+                    if (raw(i, COL_ID) < 100) && (raw(i, COL_POSITION) <= raw(i-j, COL_POSITION))
+                        printf("dela %d %d/%d %d-%d\n", raw(i, COL_ID), raw(i, COL_POSITION), raw(i-j, COL_POSITION), i, j);
+                        raw(i,:)= [];
+                        fin= 0;
+                        break; # from for20
+                    elseif (raw(i, COL_ID) > 100) && (raw(i, COL_POSITION) >= raw(i-j, COL_POSITION))
+                        printf("delb %d %d/%d %d-%d\n", raw(i, COL_ID), raw(i, COL_POSITION), raw(i-j, COL_POSITION), i, j);
+                        raw(i,:)= [];
+                        fin= 0;
+                        break; # from for20
+                    endif
+                endif
+            endfor
+            #-----
 
-out = cv2.VideoWriter(sys.argv[5],cv2.VideoWriter_fourcc(*'mp4v'), 200.0, vsize)
-out2 = cv2.VideoWriter(sys.argv[6],cv2.VideoWriter_fourcc(*'mp4v'), 200.0, vsize)
+            if fin==0
+                break
+            endif
 
-cap.set(cv2.CAP_PROP_POS_FRAMES, float(sys.argv[3]))
-framenum = int(sys.argv[3])
-FRAME_STEP= int(sys.argv[7])
-ref_update= 0
-diff_update= 0
-calm_update= 0
-diff_val= 0.0
+            i++;
+        endwhile
+    else 
+        i++;
+    endif
+endwhile
+ 
+save logbersih.txt raw
 
-while(1):
-	#dateTimeObj = datetime.now()
-	#timestampStr = dateTimeObj.strftime(vh"%H:%M:%S.%f")
-	#print('start: ', timestampStr)
-	ret, frame = cap.read()
-	
-#	print(frame.shape)
-#	print(ref.shape)
-	
-	# crop and subtract .item(reference] background
-	difference= cv2.absdiff(ref, frame)
-	ret,thresh = cv2.threshold(difference,THRESHOLD_VAL,255,cv2.THRESH_BINARY);
-	cue_current = cv2.bitwise_and(frame, thresh)
-	
-	#dateTimeObj = datetime.now()
-	#timestampStr = dateTimeObj.strftime("%H:%M:%S.%f")
-	#print('crop: ', timestampStr)
-	
-	#remove thin horizontal line (such as cables) ## PERHAPS VERTICAL TOO
-	for i in range(cropped_x_start, cropped_x_stop-1):
-		blobstart= 0
-		blobend= 0
-		for j in range(cropped_y_stop-1, cropped_y_start+1, -1):
-			if cue_current.item(j,i,1) > THRESHOLD_VAL: # start of object
-				if (blobstart== 0):
-					blobstart= j
-			if cue_current.item(j,i,1) < THRESHOLD_VAL: # end of object
-				if (blobstart!= 0):
-					blobend= j
-			if (blobend-blobstart) < thickness_min_vertical:
-				for j in range(blobend, blobstart, -1):
-					cue_current.itemset((j,i,1) , 0) # remove all traces, perhaps green only would suffice
-					cue_current.itemset((j,i,0) , 0) # blue too
-					cue_current.itemset((j,i,2) , 0) # red too
-				blobstart= 0
-				blobend= 0
-	
-	# blue: object 
-	# green: bondo (probable object behind occlusion)
-	# red: assigned ID
-	
-	for i in range(cropped_x_start, cropped_x_stop-1):
-		for j in range(cropped_y_stop-1, cropped_y_start+1, -1):
-			if  cue_current.item(j,i,1) > THRESHOLD_VAL: # if detect object, based on green
-				#print("f{} j{} i{}".format(framenum, j, i))
-				cue_current.itemset((1,i,0) , 255) # blue
-				cue_current.itemset((3,i,2) , 0) # clear the ID, if noise happens
-				cue_current.itemset((5,i,2) , 0) # clear the ID, if noise happens
-				break
-	
-	#dateTimeObj = datetime.now()
-	#timestampStr = dateTimeObj.strftime("%H:%M:%S.%f")
-	#print('scan: ', timestampStr)
-	
-	# join to obtain contiguous block using green lines	
-	block_start= 0	
-	for i in range(cropped_x_start, cropped_x_stop-1):
-		if cue_current.item(1,i,0) > THRESHOLD_VAL:
-			block_start= i
-		else:
-			if (i-block_start) < thickness_min_horizontal: 
-				cue_current.itemset((1,i,1) , 255) # green
-				cue_current.itemset((3,i,2) , 0) # clear the ID, if noise happens
-				cue_current.itemset((5,i,2) , 0) # clear the ID, if noise happens
-			else: 
-				block_start= 0
-	
-	#dateTimeObj = datetime.now()
-	#timestampStr = dateTimeObj.strftime("%H:%M:%S.%f")
-	#print('bondo: ', timestampStr)
-	
-	block_start= 0
-	block_end= 0
-	vehicle_detect= 0
-	
-	image_display= frame.copy()
-	
-	for i in range(cropped_x_start, cropped_x_stop-1):
-		if (cue_current.item(1,i,0) != 0 or cue_current.item(1,i,1) != 0) and block_start==0:
-			block_start= i
-		elif (cue_current.item(1,i,0) == 0 and cue_current.item(1,i,1) == 0) and block_end==0:
-			block_end= i
-			#remove spurious lines less than minimum block width
-			if ((block_end-block_start) <= block_width) and block_start!=0 and block_end != 0:
-				for n in range(block_start, block_end):
-					cue_current.itemset((1,n,0) , 0) # blue
-					cue_current.itemset((1,n,1) , 0) # green
-					cue_current.itemset((1,n,2) , 0) # red
-			
-			# apply identifier
-			elif (block_start!= 0) and (block_end != 0):
-				vehicle_detect= vehicle_detect +1
-				# from right: red: 1 to 99
-				# from left: 101 to 200
-				# print("{} start{} stop{}".format(framenum, block_start, block_end))
-				
-				#from left gate, line3
-				if (block_start < gate_left) and (block_end > gate_left):
-					vehicle_id=  cue_prev.item(3, int((block_start + block_end)/2) ,2)
-					if (vehicle_id == 0) :
-						vehicle_id= random.randint(1, 99)
-						vehicle_detect= vehicle_detect +1
-						#if (cue_prev.item(3, int((block_start + block_end)/2) ,2] == 0):
-						#print("{} {} {} {} leftnew".format(vehicle_id, framenum, block_start, block_end))
-					for n in range(block_start, block_end):
-						cue_current.itemset((3,n,2) , vehicle_id)
-				
-				# from right gate, line5
-				elif (block_start < gate_right) and (block_end > gate_right):
-					vehicle_id= cue_prev.item(5, int((block_start + block_end)/2) ,2)
-					if (vehicle_id == 0) :
-						vehicle_id= random.randint(101, 199)
-						vehicle_detect= vehicle_detect +1
-						#if (cue_prev.item(2, int((block_start + block_end)/2) ,2] == 0):
-						#print("{} {} {} {} rightnew {}".format(vehicle_id, framenum, block_start, block_end, gate_right))
-					for n in range(block_start, block_end):
-						cue_current.itemset((5,n,2) , vehicle_id)
-				
-				# retain the value while in the middle
-				else:
-				#if (block_start >= gate_left) and (block_end <= gate_right):
-					# left to right
-					vehicle_id = 0
-					for n in range(block_start, block_end, 2):
-						vehicle_id = cue_prev.item(3, n, 2)
-						vehicle_detect= vehicle_detect +1
-						if (vehicle_id != 0):
-							break
-					if ( vehicle_id != 0) :
-						# find the height
-						height_start= 99999999 
-						height_end= 0
-						for i in range(block_start, block_end-1):
-							for j in range(cropped_y_stop-2, cropped_y_start+6, -1):
-								if cue_current.item(j,i,1) != 0:
-									if (j < height_start):
-										height_start= j
-									if (j > height_end):
-										height_end= j
-						start_point = (block_start, height_start)
-						end_point = (block_end-thickness_min_horizontal, height_end)	# for aesthetic
-						label_point= (block_start+10, height_end-20)
-						cv2.rectangle(image_display, start_point, end_point, (255,36,12), 1) # blue
-						cv2.putText(image_display, str(vehicle_id), label_point, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,36, 12), 1)
-						print("{} {} {} {} {} {} 1".format(vehicle_id, framenum, block_start, block_end-thickness_min_horizontal, height_start, height_end)) # left is '1'
-						for n in range(block_start, block_end):
-							cue_current.itemset((3,n,2),  vehicle_id)
-					# right to left
-					for n in range(block_end, block_start, -2):
-						vehicle_id = cue_prev.item(5, n, 2)
-						vehicle_detect= vehicle_detect +1
-						if (vehicle_id != 0):
-							break
-					if ( vehicle_id != 0) :
-						# find the height
-						height_start= 99999999 
-						height_end= 0
-						for i in range(block_start, block_end-1):
-							for j in range(cropped_y_stop-2, cropped_y_start+6, -1):
-								if cue_current.item(j,i,1) != 0:
-									if (j < height_start):
-										height_start= j
-									if (j > height_end):
-										height_end= j
-						start_point = (block_start, height_start) 
-						end_point = (block_end-thickness_min_horizontal, height_end)  # for aesthetic purpose
-						label_point= (block_start+10, height_start+20)
-						cv2.rectangle(image_display, start_point, end_point, (12,36,255), 1) # red
-						cv2.putText(image_display, str(vehicle_id), label_point, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (12,36, 255), 1)
-						print("{} {} {} {} {} {} 0".format(vehicle_id, framenum, block_start, block_end-thickness_min_horizontal, height_start, height_end)) # right is '0'
-						for n in range(block_start, block_end):
-							cue_current.itemset((5,n,2), vehicle_id)
-							
-			block_start= 0
-			block_end= 0
-	
 
-	
-	#draw the gate
-	for j in range(cropped_y_start, cropped_y_stop):
-#		image_display.itemset((j,gate_left,1) , 255) # green
-#		image_display.itemset((j,gate_right,1) , 255) # green
-		cue_current.itemset((j,gate_left,1) , 255) # green
-		cue_current.itemset((j,gate_right,1) , 255) # green
-	
-	# update the reference background, handle these multiple scenarios
-	# - small jitters
-	# - update if "calm sequence" is found
-	# - stalling reference image w/ artifact
-	ref_update= ref_update+FRAME_STEP
-	
-	diff_val_prev= diff_val
-	diff_val= cv2.sumElems(cue_current)[1]
-	if (diff_val > DIFF_THRESHOLD):
-		diff_update= diff_update+1
-	else:
-		diff_update= 0
-	if (abs(diff_val-diff_val_prev) > 6000.0):
-		diff_update= 0
-		
-	calm_val= cv2.sumElems(cv2.absdiff(frame_prev, frame))[1]
-	if (calm_val < 6000.0):
-		calm_update= calm_update+1
-	else:
-		calm_update= 0	
+#----- calculating traffic passes 
+raw= sortrows(raw, [1 2]);
+POS_JUMP= 2000; # a single pass should no be longer than 10 seconds
 
-	#print("{}:{} r{} d{}:{} c{}:{} ".format(framenum, vehicle_detect, ref_update, diff_update, diff_val, calm_update, calm_val))
-	if ((ref_update>update_interval) and (diff_val < DIFF_THRESHOLD) and (vehicle_detect==0))  or \
-		(diff_update > update_interval) or\
-		(calm_update > update_interval) :
-		ref_update = 0
-		diff_update= 0
-		calm_update= 0
-		ref= frame
-	## how about update only when ref and frame isn't that different
-	
-	dateTimeObj = datetime.now()
-	timestampStr = dateTimeObj.strftime("%H:%M:%S.%f")
-	#print('traffic: ', timestampStr)
-	cue_prev= cue_current;
-	frame_prev= frame;
-	
-	#cv2.imshow('display',image_display)
-	#cv2.imshow('cue',cue_current)
-	
-    #image_display_resized=cv2.resize(image_display, vsize, interpolation= cv2.INTER_AREA)
-	#cue_current_resized = cv2.resize(cue_current, vsize, interpolation = cv2.INTER_AREA)
-	#cv2.imshow('display',image_display_resized)
-	#cv2.imshow('cue',cue_current_resized)
-	
-	# k = cv2.waitKey(1) & 0xFF
-	# if k== ord("c"):
-		# print("saving: "+str(framenum).zfill(digit)+'.png')
-		# cv2.imwrite('cap'+str(framenum).zfill(digit)+'.png', frame)
-	# if k== ord("r"):
-		# print("reference: "+str(framenum).zfill(digit)+'.png')
-		# cv2.imshow('ref',ref)
-		# cv2.imwrite('ref'+str(framenum).zfill(digit)+'.png', frame)
-		# ref= frame
-	# if k== 27: # esc
-		# break
-	
-	out.write(image_display)
-	out2.write(cue_current)
-	#out.write(image_display_resized)
-	#out2.write(cue_current_resized)
-	
-	#print('time: ', timestampStr, "framenum: ", str(framenum));
-	framenum += FRAME_STEP
-	cap.set(cv2.CAP_PROP_POS_FRAMES, float(framenum))
-	
-	if framenum> int(sys.argv[4]):
-		break
-	
-cap.release()
-out.release()
-cv2.destroyAllWindows()
+clear traffic;
+start= 1;
+n=1;
+pos_max= 0;
+pos_min= 5000;
+for i=2:size(raw,1)
+    if (raw(start,COL_ID) != raw(i,COL_ID)) || (raw(start,COL_DIRECTION) != raw(i,COL_DIRECTION)) ||    (( abs (raw(i,COL_FRAMENUM) - raw(i-1,COL_FRAMENUM))) > POS_JUMP )
+        stop= i-1;
+        
+        traffic(n,1)= raw(start, COL_ID);                                 # ID
+        traffic(n,2)= raw(start, COL_FRAMENUM);                           # pass time
+        traffic(n,3)= raw(stop, COL_FRAMENUM) - raw(start, COL_FRAMENUM); # pass duration
+        traffic(n,4)= raw(start, COL_DIRECTION);                          # direction
+        traffic(n,5)= min(raw(start:stop, COL_WIDTH));                   # width
+        traffic(n,6)= min(raw(start:stop, COL_HEIGHT));                  # height
+        #traffic(n,5)= mode(raw(start:stop, COL_WIDTH));                   # width
+        #traffic(n,6)= mode(raw(start:stop, COL_HEIGHT));                  # height
+        #traffic(n,5)= average(raw(start:stop, COL_WIDTH));                   # width
+        #traffic(n,6)= average(raw(start:stop, COL_HEIGHT));                  # height
+        traffic(n,7)= pos_max;                                            # rightmost position
+        traffic(n,8)= pos_min;                                            # leftmost position
+        traffic(n,9)= raw(start, COL_POSITION);                          # initial position
+        
+        start=i;
+        pos_max= 0;
+        pos_min= 5000;
+        
+    n+=1;
+    endif
+    if ( raw(i, COL_POSITION) < pos_min)
+    pos_min= raw(i, COL_POSITION);
+    endif
+    if ( raw(i, COL_POSITION) > pos_max)
+    pos_max= raw(i, COL_POSITION);
+    endif
+endfor
+
+# filter the wrong-direction output (opposite-end detection)
+# repeat until clear
+do
+    size_prev= size(traffic,1);        
+    for n=1:size(traffic,1)-1
+        if traffic(n,3)<10 # duration short
+            traffic(n,:) = [];
+		endif
+		if traffic(n,1)>199 # invalid ID
+            traffic(n,:) = [];  			
+		endif
+    endfor
+    size_cur= size(traffic,1);
+until (size_cur==size_prev)
+
+traffic= sortrows(traffic, [2 1]);
+csvwrite("traffic-east-dirty.csv", traffic);
+
+save logsorted.txt raw
+save trafficwidthcorrected.txt traffic
+        
+#---------
+
+TIME_CLUSTER= 3 # mins
+
+traffic(:, COL_FRAMENUM) /= 3600; # now in minutes
+COL_DIRECTION=4;
+
+#count per direction
+clear sum_direction;
+sum_direction(2, ceil(max(traffic(:,COL_FRAMENUM)) / TIME_CLUSTER))=1;
+for i=1:size(traffic,1)
+    if ( traffic(i, COL_DIRECTION) < 1)
+            sum_direction(1, ceil(traffic(i,COL_FRAMENUM)/TIME_CLUSTER) ) += 1;
+    else
+            sum_direction(2, ceil(traffic(i,COL_FRAMENUM)/TIME_CLUSTER) ) += 1;
+    endif
+endfor
+
+timestamp= 0:TIME_CLUSTER:max(traffic(:,COL_FRAMENUM));
+plot(timestamp, sum_direction);
+# sort from framenum/time of occurence
