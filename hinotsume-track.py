@@ -1,5 +1,5 @@
 #!/usr/bin/python3 -u
-# python hinotsume-track.py input-video.mp4 reference-image.png 0 82100 label.mp4 cue.mp4 framestep | tee passes.log
+# python hinotsume-track.py input-video.mp4 reference-image.png 0 82100 label.mp4  cue.mp4
 # 00000.MTS starts at 400
 # 00001.MTS starts at 0
 
@@ -11,7 +11,7 @@ import random
 #from skimage import morphology
 from datetime import datetime
 
-THRESHOLD_VAL= 40
+THRESHOLD_VAL= 60
 FRAME_STEP= 10
 DIFF_THRESHOLD= 62000.0 
 LINE_THICKNESS= 3
@@ -20,13 +20,13 @@ LINE_THICKNESS= 3
 startx= 0              
 stopx= 2048
 starty=0
-stopy= 72
+stopy= 78
 
 # image section to be processed, within cropped area
 cropped_x_start= 0
 cropped_x_stop= 2048 # shorter window makes life easier
 cropped_y_start= 0
-cropped_y_stop= 72
+cropped_y_stop= 78
 
 thickness_min_horizontal= 10 # maximum width of bondo
 thickness_min_vertical= 10 # maximum height of bondo
@@ -57,6 +57,7 @@ FRAME_STEP= int(sys.argv[7])
 ref_update= 0
 diff_update= 0
 calm_update= 0
+crowded_update= 0;
 diff_val= 0.0
 
 while(1):
@@ -76,7 +77,7 @@ while(1):
     #dateTimeObj = datetime.now()
     #timestampStr = dateTimeObj.strftime("%H:%M:%S.%f")
     #print('crop: ', timestampStr)
-        
+      
     #remove thin horizontal line (such as cables) ## PERHAPS VERTICAL TOO
     for i in range(cropped_x_start, cropped_x_stop-1):
         blobstart= 0
@@ -257,22 +258,28 @@ while(1):
         diff_update= diff_update+1
     else:
         diff_update= 0
-    if (abs(diff_val-diff_val_prev) > 6000.0):
+    if (abs(diff_val-diff_val_prev) > 10000.0):
         diff_update= 0
-        
+    if (diff_val > 12000000.0):
+        crowded_update= crowded_update+1
+    else:
+        crowded_update= 0    
+    
     calm_val= cv2.sumElems(cv2.absdiff(frame_prev, frame))[1]
-    if (calm_val < 6000.0):
+    if (calm_val < 30000.0):
         calm_update= calm_update+1
     else:
         calm_update= 0    
 
-    #print("{}:{} r{} d{}:{} c{}:{} ".format(framenum, vehicle_detect, ref_update, diff_update, diff_val, calm_update, calm_val))
+    print("{}:{} r{} d{}:{} c{}:{} x{}".format(framenum, vehicle_detect, ref_update, diff_update, diff_val, calm_update, calm_val, crowded_update))
     if ((ref_update>update_interval) and (diff_val < DIFF_THRESHOLD) and (vehicle_detect==0))  or \
         (diff_update > update_interval) or\
-        (calm_update > update_interval) :
+        (calm_update > update_interval) or\
+        ((crowded_update > update_interval*4) and (vehicle_detect==0)) :
         ref_update = 0
         diff_update= 0
         calm_update= 0
+        crowded_update= 0;
         ref= frame
     ## how about update only when ref and frame isn't that different
     
